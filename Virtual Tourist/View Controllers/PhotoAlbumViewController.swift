@@ -120,9 +120,15 @@ class PhotoAlbumViewController: UIViewController{
     func loadingImages(_ loadingImages: Bool) {
         if loadingImages {
             activityIndicator.startAnimating()
+            collectionView.allowsMultipleSelection = false
+            collectionView.isScrollEnabled = false
+            collectionView.isUserInteractionEnabled = false
             button.isEnabled = false
         } else {
             activityIndicator.stopAnimating()
+            collectionView.allowsMultipleSelection = true
+            collectionView.isScrollEnabled = true
+            collectionView.isUserInteractionEnabled = true
             button.isEnabled = true
         }
     }
@@ -146,6 +152,7 @@ extension PhotoAlbumViewController: UICollectionViewDelegate, UICollectionViewDa
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "cellId", for: indexPath) as! CollectionViewCell
         cell.imageView.image = UIImage(named: "imagePlaceholder")
+        deselectAllItems(animated: true)
         let id = photoArray[indexPath.row].id
         let farmId = photoArray[indexPath.row].farm
         let serverId = photoArray[indexPath.row].server

@@ -15,8 +15,9 @@ class PhotoAlbumViewController: UIViewController{
     @IBOutlet weak var button: UIButton!
     @IBOutlet weak var mapView: MKMapView!
     @IBOutlet weak var activityIndicator: UIActivityIndicatorView!
+    
     var pin: Pin!
-    var images: [UIImage] = []
+    var photoArray: [Photo] = []
     var dictionarySelectedIndexPath: [IndexPath : Bool] = [:]
     var inEditMode = false
     var latString: String = ""
@@ -43,6 +44,14 @@ class PhotoAlbumViewController: UIViewController{
         setupFlowLayout()
     }
     
+    private func setupFlowLayout() {
+        let space:CGFloat = 3.0
+        let dimension = (view.frame.size.width - (2 * space)) / 3.0
+        flowLayout.minimumInteritemSpacing = space
+        flowLayout.minimumLineSpacing = space
+        flowLayout.itemSize = CGSize(width: dimension, height: dimension)
+    }
+    
     private func setupLabel() {
         view.addSubview(label)
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -57,37 +66,24 @@ class PhotoAlbumViewController: UIViewController{
     }
     
     private func loadImages() {
-        if images.count == 0 {
-            latString = String(pin.coordinate.latitude)
-            lonString = String(pin.coordinate.longitude)
-            loadingImages(true)
-            FlickrClient.getImageIDs(lat: latString, lon: lonString, newCollection: false, completion: handleArrayOfPhoto(photoArray:))
-        }
-    }
-    
-    private func setupFlowLayout() {
-        let space:CGFloat = 3.0
-        let dimension = (view.frame.size.width - (2 * space)) / 3.0
-        flowLayout.minimumInteritemSpacing = space
-        flowLayout.minimumLineSpacing = space
-        flowLayout.itemSize = CGSize(width: dimension, height: dimension)
+        latString = String(pin.coordinate.latitude)
+        lonString = String(pin.coordinate.longitude)
+        loadingImages(true)
+        FlickrClient.getImageIDs(lat: latString, lon: lonString, newCollection: false, completion: handleArrayOfPhoto(photoArray:))
     }
     
     private func handleArrayOfPhoto(photoArray: [Photo]) {
         if photoArray.count > 0 {
-            FlickrClient.requestImageFile(photoArray: photoArray, completion: handleImageFile(images:))
+            self.photoArray = photoArray
+            DispatchQueue.main.async {
+                self.collectionView.reloadData()
+                self.loadingImages(false)
+            }
         } else {
             DispatchQueue.main.async {
-                self.setupLabel()
-            }
-        }
-    }
-    
-    private func handleImageFile(images: [UIImage]) {
-        self.images = images
-        DispatchQueue.main.async {
-            self.collectionView.reloadData {
                 self.loadingImages(false)
+                self.button.isHidden = true
+                self.setupLabel()
             }
         }
     }
@@ -101,7 +97,7 @@ class PhotoAlbumViewController: UIViewController{
                 }
             }
             for i in deleteNeededIndexdPaths.sorted(by: { $0.item > $1.item}) {
-                images.remove(at: i.item)
+                photoArray.remove(at: i.item)
             }
             collectionView.deleteItems(at: deleteNeededIndexdPaths)
             dictionarySelectedIndexPath.removeAll()
@@ -110,9 +106,6 @@ class PhotoAlbumViewController: UIViewController{
         } else {
             loadingImages(true)
             FlickrClient.getImageIDs(lat: latString, lon: lonString, newCollection: true, completion: handleArrayOfPhoto(photoArray:))
-            if self.images.count != 0 {
-                label.isHidden = true
-            }
         }
     }
     
@@ -121,15 +114,6 @@ class PhotoAlbumViewController: UIViewController{
             button.setTitle("DELETE", for: .normal)
         } else {
             button.setTitle("NEW COLLECTION", for: .normal)
-        }
-    }
-    
-    private func deselectAllItems(animated: Bool) {
-        let selectedItems = collectionView.indexPathsForVisibleItems
-        for indexPath in selectedItems {
-            collectionView.deselectItem(at: indexPath, animated: animated)
-            let cell = collectionView.cellForItem(at: indexPath) as! CollectionViewCell
-            cell.imageView.alpha = 1
         }
     }
     
@@ -143,26 +127,44 @@ class PhotoAlbumViewController: UIViewController{
         }
     }
     
+    private func deselectAllItems(animated: Bool) {
+        let selectedItems = collectionView.indexPathsForVisibleItems
+        for indexPath in selectedItems {
+            collectionView.deselectItem(at: indexPath, animated: animated)
+            let cell = collectionView.cellForItem(at: indexPath) as! CollectionViewCell
+            cell.imageView.alpha = 1
+        }
+    }
+    
 }
 
 extension PhotoAlbumViewController: UICollectionViewDelegate, UICollectionViewDataSource {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return images.count
+        return photoArray.count
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "cellId", for: indexPath) as! CollectionViewCell
         cell.imageView.image = UIImage(named: "imagePlaceholder")
-        DispatchQueue.main.async {
-            if self.images.count <= indexPath.row {
-         
-            } else {
-                print("images.count: \(self.images.count)")
-                print("indexPath.row: \(indexPath.row)")
-                cell.imageView.image = self.images[indexPath.row]
-                cell.setNeedsLayout()
-                self.deselectAllItems(animated: true)
+        let id = photoArray[indexPath.row].id
+        let farmId = photoArray[indexPath.row].farm
+        let serverId = photoArray[indexPath.row].server
+        let secret = photoArray[indexPath.row].secret
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            let urlString = "https://farm\(farmId).staticflickr.com/\(serverId)/\(id)_\(secret).jpg"
+            let url = URL(string: urlString)!
+            let task = URLSession.shared.dataTask(with: url) {(data, response, error) in
+                guard let data = data else {
+                    return
+                }
+                let image = UIImage(data: data)
+                DispatchQueue.main.async {
+                    cell.imageView.image = image
+                    self.deselectAllItems(animated: true)
+                }
             }
+            task.resume()
         }
         return cell
     }
@@ -214,11 +216,3 @@ extension PhotoAlbumViewController: MKMapViewDelegate {
         self.mapView.setRegion(region, animated: false)
     }
 }
-
-extension UICollectionView {
-    func reloadData(completion: @escaping () -> ()) {
-        UIView.animate(withDuration: 0, animations: { self.reloadData()})
-        {_ in completion() }
-    }
-}
-

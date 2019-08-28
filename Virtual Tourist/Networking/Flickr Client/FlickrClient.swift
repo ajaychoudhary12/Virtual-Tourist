@@ -10,7 +10,7 @@ import UIKit
 
 class FlickrClient {
     static let apiKey = "c5ab0ffa22d2dad9ec251304df5a73a7"
-    
+    static var pages = 1
     class func getImageIDs(lat: String, lon: String, newCollection: Bool, completion: @escaping ([Photo]) -> Void) {
         
         var url : URL{
@@ -38,12 +38,16 @@ class FlickrClient {
         
         let task = URLSession.shared.dataTask(with: url) { (data, response, error) in
             guard let data = data else {
+                completion([])
                 return
             }
             let range = 14..<data.count - 1
             let newData = data.subdata(in: range)
             do {
                 let responseObject = try JSONDecoder().decode(PhotoData.self, from: newData)
+                if !newCollection {
+                    pages = responseObject.photos.pages
+                }
                 completion(responseObject.photos.photo)
             } catch {
                 print(error)
@@ -53,30 +57,30 @@ class FlickrClient {
         task.resume()
     }
     
-    class func requestImageFile(photoArray: [Photo], completion: @escaping ([UIImage]) -> Void) {
-        var uiImages: [UIImage] = []
-        print(photoArray.count)
-        for i in 0..<photoArray.count {
-            let id = photoArray[i].id
-            let farmId = photoArray[i].farm
-            let serverId = photoArray[i].server
-            let secret = photoArray[i].secret
-            
-            DispatchQueue.global(qos: .userInitiated).async {
-                let urlString = "https://farm\(farmId).staticflickr.com/\(serverId)/\(id)_\(secret).jpg"
-                let url = URL(string: urlString)!
-                let task = URLSession.shared.dataTask(with: url) { (data, response, error) in
-                    guard let data = data else {
-                        return
-                    }
-                    let image = UIImage(data: data)
-                    uiImages.append(image!)
-                    completion(uiImages)
-                }
-                task.resume()
-            }
-        }
-    }
+//    class func requestImageFile(photoArray: [Photo], completion: @escaping ([UIImage]) -> Void) {
+//        var uiImages: [UIImage] = []
+//        print(photoArray.count)
+//        for i in 0..<photoArray.count {
+//            let id = photoArray[i].id
+//            let farmId = photoArray[i].farm
+//            let serverId = photoArray[i].server
+//            let secret = photoArray[i].secret
+//            
+//            DispatchQueue.global(qos: .userInitiated).async {
+//                let urlString = "https://farm\(farmId).staticflickr.com/\(serverId)/\(id)_\(secret).jpg"
+//                let url = URL(string: urlString)!
+//                let task = URLSession.shared.dataTask(with: url) { (data, response, error) in
+//                    guard let data = data else {
+//                        return
+//                    }
+//                    let image = UIImage(data: data)
+//                    uiImages.append(image!)
+//                    completion(uiImages)
+//                }
+//                task.resume()
+//            }
+//        }
+//    }
 
 }
 

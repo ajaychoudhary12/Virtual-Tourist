@@ -33,7 +33,10 @@ class PhotoAlbumViewController: UIViewController{
     }
     
     private func setupMap() {
-        mapView.addAnnotation(pin)
+        let annotation = MKPointAnnotation()
+        let coordinate = CLLocationCoordinate2D(latitude: pin.lat, longitude: pin.long)
+        annotation.coordinate = coordinate
+        mapView.addAnnotation(annotation)
         mapView.delegate = self
         mapView.isZoomEnabled = false
         mapView.isScrollEnabled = false
@@ -69,8 +72,8 @@ class PhotoAlbumViewController: UIViewController{
     }
     
     private func loadImages() {
-        latString = String(pin.coordinate.latitude)
-        lonString = String(pin.coordinate.longitude)
+        latString = String(pin.lat)
+        lonString = String(pin.long)
         loadingImages(true)
         FlickrClient.getImageIDs(lat: latString, lon: lonString, newCollection: false, completion: handleArrayOfPhoto(photoArray:))
     }
@@ -188,7 +191,8 @@ extension PhotoAlbumViewController: MKMapViewDelegate {
     }
     
     func mapViewDidFinishRenderingMap(_ mapView: MKMapView, fullyRendered: Bool) {
-        let region = MKCoordinateRegion(center: pin.coordinate, span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1))
+        let coordinate = CLLocationCoordinate2D(latitude: pin.lat, longitude: pin.long)
+        let region = MKCoordinateRegion(center: coordinate, span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1))
         self.mapView.setRegion(region, animated: false)
     }
 }

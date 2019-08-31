@@ -9,13 +9,12 @@
 import Foundation
 import MapKit
 
-class Pin: NSObject, MKAnnotation{
-    var coordinate: CLLocationCoordinate2D
-    var title: String?
-    //var photoEntities: [PhotoEntity] = []
+class Pin {
+    var lat: Double
+    var long: Double
     
-    init(coordinate: CLLocationCoordinate2D) {
-        self.coordinate = coordinate
-        super.init()
+    init(lat: Double, long: Double) {
+        self.lat = lat
+        self.long = long
     }
 }

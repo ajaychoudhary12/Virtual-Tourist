@@ -30,7 +30,7 @@ class FlickrClient {
             components.queryItems!.append(URLQueryItem(name: Constants.FlickrAPIKeys.Lon, value: lon))
             
             if newCollection {
-                let randNumber = Int.random(in: 0..<20)
+                let randNumber = Int.random(in: 1...pages)
                 components.queryItems!.append(URLQueryItem(name: Constants.FlickrAPIKeys.Page, value: String(randNumber)))
             }
             return components.url!
@@ -56,31 +56,5 @@ class FlickrClient {
         }
         task.resume()
     }
-    
-//    class func requestImageFile(photoArray: [Photo], completion: @escaping ([UIImage]) -> Void) {
-//        var uiImages: [UIImage] = []
-//        print(photoArray.count)
-//        for i in 0..<photoArray.count {
-//            let id = photoArray[i].id
-//            let farmId = photoArray[i].farm
-//            let serverId = photoArray[i].server
-//            let secret = photoArray[i].secret
-//            
-//            DispatchQueue.global(qos: .userInitiated).async {
-//                let urlString = "https://farm\(farmId).staticflickr.com/\(serverId)/\(id)_\(secret).jpg"
-//                let url = URL(string: urlString)!
-//                let task = URLSession.shared.dataTask(with: url) { (data, response, error) in
-//                    guard let data = data else {
-//                        return
-//                    }
-//                    let image = UIImage(data: data)
-//                    uiImages.append(image!)
-//                    completion(uiImages)
-//                }
-//                task.resume()
-//            }
-//        }
-//    }
-
 }
 

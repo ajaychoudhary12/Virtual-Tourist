@@ -19,7 +19,7 @@ class PhotoAlbumViewController: UIViewController{
     var pin: Pin!
     var photoArray: [Photo] = []
     var dictionarySelectedIndexPath: [IndexPath : Bool] = [:]
-    var inEditMode = false
+    //var inEditMode = false
     var latString: String = ""
     var lonString: String = ""
     let label = UILabel()
@@ -29,12 +29,15 @@ class PhotoAlbumViewController: UIViewController{
         setupMap()
         setupCollectionView()
         loadImages()
-        updateButtonTitle()
+        //updateButtonTitle()
     }
     
     private func setupMap() {
         mapView.addAnnotation(pin)
         mapView.delegate = self
+        mapView.isZoomEnabled = false
+        mapView.isScrollEnabled = false
+        mapView.isUserInteractionEnabled = false
     }
     
     private func setupCollectionView() {
@@ -89,32 +92,8 @@ class PhotoAlbumViewController: UIViewController{
     }
     
     @IBAction func buttonTapped(_ sender: Any) {
-        if inEditMode {
-            var deleteNeededIndexdPaths: [IndexPath] = []
-            for (key, value) in dictionarySelectedIndexPath {
-                if value {
-                    deleteNeededIndexdPaths.append(key)
-                }
-            }
-            for i in deleteNeededIndexdPaths.sorted(by: { $0.item > $1.item}) {
-                photoArray.remove(at: i.item)
-            }
-            collectionView.deleteItems(at: deleteNeededIndexdPaths)
-            dictionarySelectedIndexPath.removeAll()
-            inEditMode = false
-            updateButtonTitle()
-        } else {
-            loadingImages(true)
-            FlickrClient.getImageIDs(lat: latString, lon: lonString, newCollection: true, completion: handleArrayOfPhoto(photoArray:))
-        }
-    }
-    
-    private func updateButtonTitle() {
-        if inEditMode {
-            button.setTitle("DELETE", for: .normal)
-        } else {
-            button.setTitle("NEW COLLECTION", for: .normal)
-        }
+        loadingImages(true)
+        FlickrClient.getImageIDs(lat: latString, lon: lonString, newCollection: true, completion: handleArrayOfPhoto(photoArray:))
     }
     
     func loadingImages(_ loadingImages: Bool) {
@@ -133,16 +112,17 @@ class PhotoAlbumViewController: UIViewController{
         }
     }
     
-    private func deselectAllItems(animated: Bool) {
-        let selectedItems = collectionView.indexPathsForVisibleItems
-        for indexPath in selectedItems {
-            collectionView.deselectItem(at: indexPath, animated: animated)
-            let cell = collectionView.cellForItem(at: indexPath) as! CollectionViewCell
-            cell.imageView.alpha = 1
-        }
+    private func buildURL(_ index: Int) -> String{
+        let id = photoArray[index].id
+        let farmId = photoArray[index].farm
+        let serverId = photoArray[index].server
+        let secret = photoArray[index].secret
+        let urlString = "https://farm\(farmId).staticflickr.com/\(serverId)/\(id)_\(secret).jpg"
+        return urlString
     }
-    
 }
+
+let imageCache = NSCache<AnyObject, AnyObject>()
 
 extension PhotoAlbumViewController: UICollectionViewDelegate, UICollectionViewDataSource {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
@@ -152,50 +132,39 @@ extension PhotoAlbumViewController: UICollectionViewDelegate, UICollectionViewDa
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "cellId", for: indexPath) as! CollectionViewCell
         cell.imageView.image = UIImage(named: "imagePlaceholder")
-        deselectAllItems(animated: true)
-        let id = photoArray[indexPath.row].id
-        let farmId = photoArray[indexPath.row].farm
-        let serverId = photoArray[indexPath.row].server
-        let secret = photoArray[indexPath.row].secret
         
-        DispatchQueue.global(qos: .userInitiated).async {
-            let urlString = "https://farm\(farmId).staticflickr.com/\(serverId)/\(id)_\(secret).jpg"
-            let url = URL(string: urlString)!
-            let task = URLSession.shared.dataTask(with: url) {(data, response, error) in
-                guard let data = data else {
-                    return
+        let urlString = buildURL(indexPath.row)
+        let url = URL(string: urlString)!
+        
+        if let imageFromCache = imageCache.object(forKey: urlString as AnyObject) as? UIImage {
+            cell.imageView.image = imageFromCache
+        } else {
+            DispatchQueue.global(qos: .userInitiated).async {
+                let task = URLSession.shared.dataTask(with: url) {(data, response, error) in
+                    guard let data = data else {
+                        self.photoArray.remove(at: indexPath.row)
+                        DispatchQueue.main.async {
+                            collectionView.reloadData()
+                        }
+                        return
+                    }
+                    let imageToCahce = UIImage(data: data)
+                    DispatchQueue.main.async {
+                        imageCache.setObject(imageToCahce!, forKey: urlString as AnyObject)
+                        cell.imageView.image = imageToCahce
+                    }
                 }
-                let image = UIImage(data: data)
-                DispatchQueue.main.async {
-                    cell.imageView.image = image
-                    self.deselectAllItems(animated: true)
-                }
+                task.resume()
             }
-            task.resume()
         }
         return cell
     }
     
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        let cell = collectionView.cellForItem(at: indexPath) as! CollectionViewCell
-        cell.imageView.alpha = 0.5
-        dictionarySelectedIndexPath[indexPath] = true
-        if collectionView.indexPathsForSelectedItems?.count == 1 {
-            inEditMode = true
-            updateButtonTitle()
-        }
+        photoArray.remove(at: indexPath.row)
+        collectionView.reloadData()
+
     }
-    
-    func collectionView(_ collectionView: UICollectionView, didDeselectItemAt indexPath: IndexPath) {
-        let cell = collectionView.cellForItem(at: indexPath) as! CollectionViewCell
-            cell.imageView.alpha = 1
-            dictionarySelectedIndexPath[indexPath] = false
-        if collectionView.indexPathsForSelectedItems == [] {
-            inEditMode = false
-            updateButtonTitle()
-        }
-    }
-    
 }
 
 extension PhotoAlbumViewController: MKMapViewDelegate {

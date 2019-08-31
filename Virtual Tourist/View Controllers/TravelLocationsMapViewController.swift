@@ -17,7 +17,6 @@ class TravelLocationsMapViewController: UIViewController, UIGestureRecognizerDel
     var pinAnnotationView: MKPinAnnotationView!
     override func viewDidLoad() {
         super.viewDidLoad()
-        mapView.delegate = self
         createSampleAnnotations()
         setupMapView()
     }
@@ -32,6 +31,7 @@ class TravelLocationsMapViewController: UIViewController, UIGestureRecognizerDel
     }
     
     func setupMapView() {
+        mapView.delegate = self
         let gestureRecogniser = UILongPressGestureRecognizer(target: self, action: #selector(handleTap(gestureReconizer:)))
         gestureRecogniser.minimumPressDuration = 0.4
         mapView.addGestureRecognizer(gestureRecogniser)

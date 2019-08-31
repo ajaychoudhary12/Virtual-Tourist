@@ -11,9 +11,8 @@ import MapKit
 
 class Pin: NSObject, MKAnnotation{
     var coordinate: CLLocationCoordinate2D
-    var name: String!
     var title: String?
-    
+    //var photoEntities: [PhotoEntity] = []
     
     init(coordinate: CLLocationCoordinate2D) {
         self.coordinate = coordinate

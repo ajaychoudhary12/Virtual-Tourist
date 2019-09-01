@@ -12,28 +12,35 @@ import CoreData
 
 class TravelLocationsMapViewController: UIViewController, UIGestureRecognizerDelegate {
 
+    let appDelegate = UIApplication.shared.delegate as! AppDelegate
     var pinArray: [Pin] = []
     @IBOutlet weak var mapView: MKMapView!
     var pinAnnotationView: MKPinAnnotationView!
     override func viewDidLoad() {
         super.viewDidLoad()
-        createSampleAnnotations()
         setupMapView()
+        setupFetchRequest()
     }
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        print(pinArray)
     }
     
-    func createSampleAnnotations() {
-        let pin = Pin(lat: 28.7014, long: 77.1025)
-        let pin2 = Pin(lat: 12.9716, long: 77.5946)
-        pinArray.append(pin)
-        pinArray.append(pin2)
+    private func setupFetchRequest() {
+        let fetchRequest: NSFetchRequest<Pin> = Pin.fetchRequest()
+        fetchRequest.sortDescriptors = []
+        if let result = try? appDelegate.persistentContainer.viewContext.fetch(fetchRequest) {
+            pinArray = result
+            for pin in pinArray {
+                let annotation = MKPointAnnotation()
+                let coordinate = CLLocationCoordinate2D(latitude: pin.lat, longitude: pin.long)
+                annotation.coordinate = coordinate
+                mapView.addAnnotation(annotation)
+            }
+        }
     }
     
-    func setupMapView() {
+    private func setupMapView() {
         mapView.delegate = self
         let gestureRecogniser = UILongPressGestureRecognizer(target: self, action: #selector(handleTap(gestureReconizer:)))
         gestureRecogniser.minimumPressDuration = 0.4
@@ -51,7 +58,10 @@ class TravelLocationsMapViewController: UIViewController, UIGestureRecognizerDel
         if gestureReconizer.state == .began {
             let location = gestureReconizer.location(in: mapView)
             let coordinate = mapView.convert(location,toCoordinateFrom: mapView)
-            let pin = Pin(lat: coordinate.latitude, long: coordinate.longitude)
+            let pin = Pin(context: appDelegate.persistentContainer.viewContext)
+            pin.lat = coordinate.latitude
+            pin.long = coordinate.longitude
+            try? appDelegate.persistentContainer.viewContext.save()
             pinArray.append(pin)
             let annotation = MKPointAnnotation()
             annotation.coordinate = coordinate
@@ -59,7 +69,7 @@ class TravelLocationsMapViewController: UIViewController, UIGestureRecognizerDel
         }
     }
     
-    func selectedPin(view: MKAnnotationView) -> Pin {
+    private func selectedPin(view: MKAnnotationView) -> Pin {
         var selectedPin: Pin!
         for pin in pinArray {
             if pin.lat == view.annotation?.coordinate.latitude && pin.long == view.annotation?.coordinate.longitude {

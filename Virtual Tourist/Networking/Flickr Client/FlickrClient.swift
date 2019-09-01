@@ -56,5 +56,46 @@ class FlickrClient {
         }
         task.resume()
     }
+    
+    class func getImages(photoArray: [Photo], index: Int, completion: @escaping (UIImage?, Int?, Bool) -> Void) {
+        let urlString = buildURL(index, photoArray: photoArray)
+        if urlString == "" {
+            return
+        }
+        let url = URL(string: urlString)!
+        
+        if let imageFromCache = imageCache.object(forKey: urlString as AnyObject) as? UIImage {
+            completion(imageFromCache, nil, true)
+        } else {
+            DispatchQueue.global(qos: .userInitiated).async {
+                let task = URLSession.shared.dataTask(with: url) {(data, response, error) in
+                    guard let data = data else {
+                        completion(nil, index, false)
+                        return
+                    }
+                    let imageToCahce = UIImage(data: data)
+                    DispatchQueue.main.async {
+                        imageCache.setObject(imageToCahce!, forKey: urlString as AnyObject)
+                        completion(imageToCahce, nil, false)
+                    }
+                }
+                task.resume()
+            }
+        }
+    }
+    
+    class func buildURL(_ index: Int, photoArray: [Photo]) -> String{
+        if photoArray.count > index {
+            let id = photoArray[index].id
+            let farmId = photoArray[index].farm
+            let serverId = photoArray[index].server
+            let secret = photoArray[index].secret
+            let urlString = "https://farm\(farmId).staticflickr.com/\(serverId)/\(id)_\(secret).jpg"
+            return urlString
+        } else {
+            return ""
+        }
+    }
+    
 }
 

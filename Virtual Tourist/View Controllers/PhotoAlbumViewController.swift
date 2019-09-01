@@ -8,6 +8,7 @@
 
 import UIKit
 import MapKit
+import CoreData
 
 class PhotoAlbumViewController: UIViewController{
     @IBOutlet weak var flowLayout: UICollectionViewFlowLayout!
@@ -16,10 +17,10 @@ class PhotoAlbumViewController: UIViewController{
     @IBOutlet weak var mapView: MKMapView!
     @IBOutlet weak var activityIndicator: UIActivityIndicatorView!
     
+    let appDelegate = UIApplication.shared.delegate as! AppDelegate
     var pin: Pin!
     var photoArray: [Photo] = []
-    var dictionarySelectedIndexPath: [IndexPath : Bool] = [:]
-    //var inEditMode = false
+    var images: [PhotoEntity] = []
     var latString: String = ""
     var lonString: String = ""
     let label = UILabel()
@@ -28,50 +29,35 @@ class PhotoAlbumViewController: UIViewController{
         super.viewDidLoad()
         setupMap()
         setupCollectionView()
-        loadImages()
-        //updateButtonTitle()
+//        setupFetchRequest()
+//        loadImages()
     }
     
-    private func setupMap() {
-        let annotation = MKPointAnnotation()
-        let coordinate = CLLocationCoordinate2D(latitude: pin.lat, longitude: pin.long)
-        annotation.coordinate = coordinate
-        mapView.addAnnotation(annotation)
-        mapView.delegate = self
-        mapView.isZoomEnabled = false
-        mapView.isScrollEnabled = false
-        mapView.isUserInteractionEnabled = false
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        setupFetchRequest()
     }
     
-    private func setupCollectionView() {
-        collectionView.delegate = self
-        collectionView.dataSource = self
-        collectionView.allowsMultipleSelection = true
-        setupFlowLayout()
-    }
-    
-    private func setupFlowLayout() {
-        let space:CGFloat = 3.0
-        let dimension = (view.frame.size.width - (2 * space)) / 3.0
-        flowLayout.minimumInteritemSpacing = space
-        flowLayout.minimumLineSpacing = space
-        flowLayout.itemSize = CGSize(width: dimension, height: dimension)
-    }
-    
-    private func setupLabel() {
-        view.addSubview(label)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        let centerX = label.centerXAnchor.constraint(equalTo: view.centerXAnchor)
-        let centerY = label.centerYAnchor.constraint(equalTo: view.centerYAnchor)
-        let heightAnchor = label.heightAnchor.constraint(equalToConstant: 50)
-        view.addConstraints([centerX, centerY, heightAnchor])
-        
-        label.text = "No images to display"
-        label.textAlignment = .center
-        label.font = .systemFont(ofSize: 26)
+    private func setupFetchRequest() {
+        let fetchRequest: NSFetchRequest<PhotoEntity> = PhotoEntity.fetchRequest()
+        let predicate = NSPredicate(format: "pin == %@", pin)
+        fetchRequest.sortDescriptors = []
+        fetchRequest.predicate = predicate
+        if let result = try? appDelegate.persistentContainer.viewContext.fetch(fetchRequest) {
+            images = result
+            loadImages()
+        }
     }
     
     private func loadImages() {
+        if images.count == 0 {
+            downloadImages()
+        } else {
+            self.collectionView.reloadData()
+        }
+    }
+    
+    private func downloadImages() {
         latString = String(pin.lat)
         lonString = String(pin.long)
         loadingImages(true)
@@ -96,6 +82,11 @@ class PhotoAlbumViewController: UIViewController{
     
     @IBAction func buttonTapped(_ sender: Any) {
         loadingImages(true)
+        for image in images {
+            appDelegate.persistentContainer.viewContext.delete(image)
+        }
+        images = []
+        photoArray = []
         FlickrClient.getImageIDs(lat: latString, lon: lonString, newCollection: true, completion: handleArrayOfPhoto(photoArray:))
     }
     
@@ -129,44 +120,49 @@ let imageCache = NSCache<AnyObject, AnyObject>()
 
 extension PhotoAlbumViewController: UICollectionViewDelegate, UICollectionViewDataSource {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return photoArray.count
+        if images.count == 0 {
+            return photoArray.count
+        } else {
+            return images.count
+        }
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "cellId", for: indexPath) as! CollectionViewCell
         cell.imageView.image = UIImage(named: "imagePlaceholder")
         
-        let urlString = buildURL(indexPath.row)
-        let url = URL(string: urlString)!
-        
-        if let imageFromCache = imageCache.object(forKey: urlString as AnyObject) as? UIImage {
-            cell.imageView.image = imageFromCache
-        } else {
-            DispatchQueue.global(qos: .userInitiated).async {
-                let task = URLSession.shared.dataTask(with: url) {(data, response, error) in
-                    guard let data = data else {
-                        self.photoArray.remove(at: indexPath.row)
-                        DispatchQueue.main.async {
-                            collectionView.reloadData()
-                        }
-                        return
+        if images.count == 0 {
+            FlickrClient.getImages(photoArray: photoArray, index: indexPath.row) { (image, indexToDelete, isImageFromCache) in
+                if let image = image {
+                    if isImageFromCache == false {
+                        let photoEntity = PhotoEntity(context: self.appDelegate.persistentContainer.viewContext)
+                        photoEntity.image = image.pngData()
+                        photoEntity.pin = self.pin
+                        try? self.appDelegate.persistentContainer.viewContext.save()
                     }
-                    let imageToCahce = UIImage(data: data)
                     DispatchQueue.main.async {
-                        imageCache.setObject(imageToCahce!, forKey: urlString as AnyObject)
-                        cell.imageView.image = imageToCahce
+                        cell.imageView.image = image
                     }
                 }
-                task.resume()
             }
+        } else {
+            let imageData = images[indexPath.row].image
+            cell.imageView.image = UIImage(data: imageData!)
         }
+        
         return cell
     }
     
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        photoArray.remove(at: indexPath.row)
+        if photoArray.count > indexPath.row {
+            photoArray.remove(at: indexPath.row)
+        }
+        //setupFetchRequest()
+        let imageToDelete = images[indexPath.row]
+        appDelegate.persistentContainer.viewContext.delete(imageToDelete)
+        try? appDelegate.persistentContainer.viewContext.save()
+        images.remove(at: indexPath.row)
         collectionView.reloadData()
-
     }
 }
 
@@ -194,5 +190,48 @@ extension PhotoAlbumViewController: MKMapViewDelegate {
         let coordinate = CLLocationCoordinate2D(latitude: pin.lat, longitude: pin.long)
         let region = MKCoordinateRegion(center: coordinate, span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1))
         self.mapView.setRegion(region, animated: false)
+    }
+}
+
+extension PhotoAlbumViewController {
+
+    private func setupMap() {
+        let annotation = MKPointAnnotation()
+        let coordinate = CLLocationCoordinate2D(latitude: pin.lat, longitude: pin.long)
+        annotation.coordinate = coordinate
+        mapView.addAnnotation(annotation)
+        mapView.delegate = self
+        mapView.isZoomEnabled = false
+        mapView.isScrollEnabled = false
+        mapView.isUserInteractionEnabled = false
+    }
+    
+    private func setupCollectionView() {
+        collectionView.delegate = self
+        collectionView.dataSource = self
+        collectionView.allowsMultipleSelection = true
+        setupFlowLayout()
+    }
+    
+    private func setupFlowLayout() {
+        let space:CGFloat = 3.0
+        let dimension = (view.frame.size.width - (2 * space)) / 3.0
+        flowLayout.minimumInteritemSpacing = space
+        flowLayout.minimumLineSpacing = space
+        flowLayout.itemSize = CGSize(width: dimension, height: dimension)
+    }
+    
+    private func setupLabel() {
+        view.addSubview(label)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        let bottomAnchor = label.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
+        let leadingAnchor = label.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor)
+        let trailingAnchor = label.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor)
+        let heightAnchor = label.heightAnchor.constraint(equalToConstant: 40)
+        view.addConstraints([bottomAnchor, leadingAnchor, trailingAnchor, heightAnchor])
+        
+        label.text = "No images to display"
+        label.textAlignment = .center
+        label.font = .systemFont(ofSize: 26)
     }
 }

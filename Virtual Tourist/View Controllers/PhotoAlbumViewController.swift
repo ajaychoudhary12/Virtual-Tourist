@@ -21,6 +21,7 @@ class PhotoAlbumViewController: UIViewController{
     var pin: Pin!
     var photoArray: [Photo] = []
     var images: [PhotoEntity] = []
+    var imagesArrayHasData = false
     var latString: String = ""
     var lonString: String = ""
     let label = UILabel()
@@ -29,13 +30,17 @@ class PhotoAlbumViewController: UIViewController{
         super.viewDidLoad()
         setupMap()
         setupCollectionView()
-//        setupFetchRequest()
-//        loadImages()
+        //setupFetchRequest()
     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         setupFetchRequest()
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        try? appDelegate.persistentContainer.viewContext.save()
     }
     
     private func setupFetchRequest() {
@@ -45,16 +50,18 @@ class PhotoAlbumViewController: UIViewController{
         fetchRequest.predicate = predicate
         if let result = try? appDelegate.persistentContainer.viewContext.fetch(fetchRequest) {
             images = result
-            loadImages()
         }
+        loadImages()
     }
     
     private func loadImages() {
         if images.count == 0 {
             downloadImages()
         } else {
+            imagesArrayHasData = true
             self.collectionView.reloadData()
         }
+        print(imagesArrayHasData)
     }
     
     private func downloadImages() {
@@ -93,13 +100,11 @@ class PhotoAlbumViewController: UIViewController{
     func loadingImages(_ loadingImages: Bool) {
         if loadingImages {
             activityIndicator.startAnimating()
-            collectionView.allowsMultipleSelection = false
             collectionView.isScrollEnabled = false
             collectionView.isUserInteractionEnabled = false
             button.isEnabled = false
         } else {
             activityIndicator.stopAnimating()
-            collectionView.allowsMultipleSelection = true
             collectionView.isScrollEnabled = true
             collectionView.isUserInteractionEnabled = true
             button.isEnabled = true
@@ -120,10 +125,10 @@ let imageCache = NSCache<AnyObject, AnyObject>()
 
 extension PhotoAlbumViewController: UICollectionViewDelegate, UICollectionViewDataSource {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        if images.count == 0 {
-            return photoArray.count
-        } else {
+        if imagesArrayHasData {
             return images.count
+        } else {
+            return photoArray.count
         }
     }
     
@@ -131,7 +136,7 @@ extension PhotoAlbumViewController: UICollectionViewDelegate, UICollectionViewDa
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "cellId", for: indexPath) as! CollectionViewCell
         cell.imageView.image = UIImage(named: "imagePlaceholder")
         
-        if images.count == 0 {
+        if imagesArrayHasData == false {
             FlickrClient.getImages(photoArray: photoArray, index: indexPath.row) { (image, indexToDelete, isImageFromCache) in
                 if let image = image {
                     if isImageFromCache == false {
@@ -139,6 +144,7 @@ extension PhotoAlbumViewController: UICollectionViewDelegate, UICollectionViewDa
                         photoEntity.image = image.pngData()
                         photoEntity.pin = self.pin
                         try? self.appDelegate.persistentContainer.viewContext.save()
+                        self.images.append(photoEntity)
                     }
                     DispatchQueue.main.async {
                         cell.imageView.image = image
@@ -209,7 +215,7 @@ extension PhotoAlbumViewController {
     private func setupCollectionView() {
         collectionView.delegate = self
         collectionView.dataSource = self
-        collectionView.allowsMultipleSelection = true
+        collectionView.allowsMultipleSelection = false
         setupFlowLayout()
     }
     

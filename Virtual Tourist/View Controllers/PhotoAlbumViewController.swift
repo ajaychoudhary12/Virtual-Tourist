@@ -30,12 +30,12 @@ class PhotoAlbumViewController: UIViewController{
         super.viewDidLoad()
         setupMap()
         setupCollectionView()
-        //setupFetchRequest()
+        setupFetchRequest()
     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        setupFetchRequest()
+        //setupFetchRequest()
     }
     
     override func viewWillDisappear(_ animated: Bool) {
@@ -50,25 +50,25 @@ class PhotoAlbumViewController: UIViewController{
         fetchRequest.predicate = predicate
         if let result = try? appDelegate.persistentContainer.viewContext.fetch(fetchRequest) {
             images = result
+            loadImages(newCollection: false)
         }
-        loadImages()
+        
     }
     
-    private func loadImages() {
+    private func loadImages(newCollection: Bool) {
         if images.count == 0 {
-            downloadImages()
+            downloadImages(newCollection: newCollection)
         } else {
             imagesArrayHasData = true
             self.collectionView.reloadData()
         }
-        print(imagesArrayHasData)
     }
     
-    private func downloadImages() {
+    private func downloadImages(newCollection: Bool) {
         latString = String(pin.lat)
         lonString = String(pin.long)
         loadingImages(true)
-        FlickrClient.getImageIDs(lat: latString, lon: lonString, newCollection: false, completion: handleArrayOfPhoto(photoArray:))
+        FlickrClient.getImageIDs(lat: latString, lon: lonString, newCollection: newCollection, completion: handleArrayOfPhoto(photoArray:))
     }
     
     private func handleArrayOfPhoto(photoArray: [Photo]) {
@@ -91,10 +91,13 @@ class PhotoAlbumViewController: UIViewController{
         loadingImages(true)
         for image in images {
             appDelegate.persistentContainer.viewContext.delete(image)
+            try? appDelegate.persistentContainer.viewContext.save()
         }
+        imageCache.removeAllObjects()
         images = []
         photoArray = []
-        FlickrClient.getImageIDs(lat: latString, lon: lonString, newCollection: true, completion: handleArrayOfPhoto(photoArray:))
+        imagesArrayHasData = false
+        loadImages(newCollection: true)
     }
     
     func loadingImages(_ loadingImages: Bool) {
@@ -109,15 +112,6 @@ class PhotoAlbumViewController: UIViewController{
             collectionView.isUserInteractionEnabled = true
             button.isEnabled = true
         }
-    }
-    
-    private func buildURL(_ index: Int) -> String{
-        let id = photoArray[index].id
-        let farmId = photoArray[index].farm
-        let serverId = photoArray[index].server
-        let secret = photoArray[index].secret
-        let urlString = "https://farm\(farmId).staticflickr.com/\(serverId)/\(id)_\(secret).jpg"
-        return urlString
     }
 }
 
@@ -135,16 +129,24 @@ extension PhotoAlbumViewController: UICollectionViewDelegate, UICollectionViewDa
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "cellId", for: indexPath) as! CollectionViewCell
         cell.imageView.image = UIImage(named: "imagePlaceholder")
-        
+        collectionView.isUserInteractionEnabled = false
         if imagesArrayHasData == false {
-            FlickrClient.getImages(photoArray: photoArray, index: indexPath.row) { (image, indexToDelete, isImageFromCache) in
+            FlickrClient.getImages(photoArray: photoArray, index: indexPath.row) { (image, indexToDelete, isImageFromCache, urlString) in
                 if let image = image {
                     if isImageFromCache == false {
                         let photoEntity = PhotoEntity(context: self.appDelegate.persistentContainer.viewContext)
                         photoEntity.image = image.pngData()
+                        photoEntity.urlString = urlString
                         photoEntity.pin = self.pin
-                        try? self.appDelegate.persistentContainer.viewContext.save()
                         self.images.append(photoEntity)
+                        if indexPath.row == self.photoArray.count - 1 {
+                            self.imagesArrayHasData = true
+                            collectionView.isUserInteractionEnabled = true
+                        }
+                        if indexPath.row == collectionView.visibleCells.count - 1 {
+                            collectionView.isUserInteractionEnabled = true
+                        }
+                        try? self.appDelegate.persistentContainer.viewContext.save()
                     }
                     DispatchQueue.main.async {
                         cell.imageView.image = image
@@ -154,6 +156,7 @@ extension PhotoAlbumViewController: UICollectionViewDelegate, UICollectionViewDa
         } else {
             let imageData = images[indexPath.row].image
             cell.imageView.image = UIImage(data: imageData!)
+            collectionView.isUserInteractionEnabled = true
         }
         
         return cell
@@ -163,11 +166,17 @@ extension PhotoAlbumViewController: UICollectionViewDelegate, UICollectionViewDa
         if photoArray.count > indexPath.row {
             photoArray.remove(at: indexPath.row)
         }
-        //setupFetchRequest()
+        imageCache.removeObject(forKey: images[indexPath.row].urlString as AnyObject)
+        
         let imageToDelete = images[indexPath.row]
         appDelegate.persistentContainer.viewContext.delete(imageToDelete)
         try? appDelegate.persistentContainer.viewContext.save()
         images.remove(at: indexPath.row)
+        if images.count == 0 {
+            imagesArrayHasData = false
+            loadImages(newCollection: false)
+            return
+        }
         collectionView.reloadData()
     }
 }

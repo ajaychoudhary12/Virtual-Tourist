@@ -16,14 +16,11 @@ class TravelLocationsMapViewController: UIViewController, UIGestureRecognizerDel
     var pinArray: [Pin] = []
     @IBOutlet weak var mapView: MKMapView!
     var pinAnnotationView: MKPinAnnotationView!
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         setupMapView()
         setupFetchRequest()
-    }
-    
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
     }
     
     private func setupFetchRequest() {

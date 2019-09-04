@@ -57,7 +57,7 @@ class FlickrClient {
         task.resume()
     }
     
-    class func getImages(photoArray: [Photo], index: Int, completion: @escaping (UIImage?, Int?, Bool) -> Void) {
+    class func getImages(photoArray: [Photo], index: Int, completion: @escaping (UIImage?, Int?, Bool, String?) -> Void) {
         let urlString = buildURL(index, photoArray: photoArray)
         if urlString == "" {
             return
@@ -65,18 +65,18 @@ class FlickrClient {
         let url = URL(string: urlString)!
         
         if let imageFromCache = imageCache.object(forKey: urlString as AnyObject) as? UIImage {
-            completion(imageFromCache, nil, true)
+            completion(imageFromCache, nil, true, nil)
         } else {
             DispatchQueue.global(qos: .userInitiated).async {
                 let task = URLSession.shared.dataTask(with: url) {(data, response, error) in
                     guard let data = data else {
-                        completion(nil, index, false)
+                        completion(nil, index, false, nil)
                         return
                     }
                     let imageToCahce = UIImage(data: data)
                     DispatchQueue.main.async {
                         imageCache.setObject(imageToCahce!, forKey: urlString as AnyObject)
-                        completion(imageToCahce, nil, false)
+                        completion(imageToCahce, nil, false, urlString)
                     }
                 }
                 task.resume()

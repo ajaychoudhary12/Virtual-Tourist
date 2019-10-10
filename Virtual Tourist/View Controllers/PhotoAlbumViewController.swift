@@ -33,11 +33,6 @@ class PhotoAlbumViewController: UIViewController{
         setupFetchRequest()
     }
     
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        //setupFetchRequest()
-    }
-    
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         try? appDelegate.persistentContainer.viewContext.save()

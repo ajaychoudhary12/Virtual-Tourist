@@ -9,7 +9,7 @@
 import UIKit
 
 class FlickrClient {
-    static let apiKey = "c5ab0ffa22d2dad9ec251304df5a73a7"
+    static let apiKey = ""
     static var pages = 1
     class func getImageIDs(lat: String, lon: String, newCollection: Bool, completion: @escaping ([Photo]) -> Void) {
         
